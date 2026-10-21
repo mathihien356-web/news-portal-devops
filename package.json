@@ -1,0 +1,12 @@
+{
+  "name": "news-portal-devops",
+  "version": "1.0.0",
+  "description": "Cổng thông tin điện tử & Website Tin tức trên nền tảng Docker kết hợp Giám sát và Quản trị Log",
+  "author": "Ma Thị Hiền <dtc245200948@ictu.edu.vn>",
+  "scripts": {
+    "start": "node preview/preview-server.js",
+    "preview": "node preview/preview-server.js",
+    "test:security": "python scripts/post_deployment_check.py",
+    "test:bruteforce": "python scripts/simulate_brute_force.py"
+  }
+}

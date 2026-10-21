@@ -1,0 +1,339 @@
+# ==============================================================================
+# HỆ THỐNG WEBSITE TIN TỨC / CỔNG THÔNG TIN ĐIỆN TỬ - DOCKER COMPOSE ORCHESTRATION
+# Sinh viên thực hiện: Ma Thị Hiền (MSSV: DTC245200948 - Lớp: CNTTK23C)
+# Khoa Công nghệ Thông tin - Trường Đại học CNTT & Truyền thông Thái Nguyên (ICTU)
+# ==============================================================================
+
+services:
+  # ----------------------------------------------------------------------------
+  # 1. CƠ SỞ DỮ LIỆU MYSQL 8.0 (CÔ LẬP TRONG MẠNG BACKEND)
+  # ----------------------------------------------------------------------------
+  db:
+    image: mysql:8.0
+    container_name: news-db
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./db/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+      - ./db/custom.cnf:/etc/mysql/conf.d/custom.cnf:ro
+      - mysql_logs:/var/log/mysql
+    networks:
+      - backend-net
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 1024M
+
+  # ----------------------------------------------------------------------------
+  # 2. ỨNG DỤNG WEB TIN TỨC (PHP 8.2 + APACHE)
+  # ----------------------------------------------------------------------------
+  webapp:
+    build:
+      context: ./webapp
+      dockerfile: Dockerfile
+    container_name: news-webapp
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      MYSQL_HOST: db
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      APP_ENV: ${APP_ENV}
+      APP_URL: ${APP_URL}
+    volumes:
+      - ./webapp:/var/www/html
+    networks:
+      - frontend-net
+      - backend-net
+      - monitoring-net
+    depends_on:
+      db:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+
+  # ----------------------------------------------------------------------------
+  # 3. QUẢN TRỊ CSDL PHPMYADMIN (TRUY CẬP AN TOÀN QUA NGINX /phpmyadmin/)
+  # ----------------------------------------------------------------------------
+  phpmyadmin:
+    image: phpmyadmin:5.2-apache
+    container_name: news-phpmyadmin
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      PMA_HOST: db
+      PMA_PORT: 3306
+      PMA_ABSOLUTE_URI: https://localhost/phpmyadmin/
+      UPLOAD_LIMIT: 64M
+    networks:
+      - frontend-net
+      - backend-net
+    depends_on:
+      db:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  # ----------------------------------------------------------------------------
+  # 4. NGINX REVERSE PROXY & SSL (CỔNG GIAO TIẾP DUY NHẤT RA BÊN NGOÀI)
+  # ----------------------------------------------------------------------------
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: news-nginx
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    ports:
+      - "${APP_PORT:-80}:80"
+      - "${APP_SSL_PORT:-443}:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - nginx_logs:/var/log/nginx
+    tmpfs:
+      - /tmp
+      - /var/run
+    networks:
+      - frontend-net
+      - monitoring-net
+    depends_on:
+      - webapp
+      - phpmyadmin
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  # ----------------------------------------------------------------------------
+  # 5. GIÁM SÁT HIỆU NĂNG CONTAINER - CADVISOR
+  # ----------------------------------------------------------------------------
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    container_name: news-cadvisor
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    networks:
+      - monitoring-net
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+  # ----------------------------------------------------------------------------
+  # 6. EXPORTER METRICS NGINX CHO PROMETHEUS
+  # ----------------------------------------------------------------------------
+  nginx-exporter:
+    image: nginx/nginx-prometheus-exporter:1.3.0
+    container_name: news-nginx-exporter
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    command:
+      - -nginx.scrape-uri=http://nginx:80/nginx_status
+    networks:
+      - monitoring-net
+    depends_on:
+      - nginx
+    deploy:
+      resources:
+        limits:
+          cpus: '0.2'
+          memory: 128M
+
+  # ----------------------------------------------------------------------------
+  # 7. EXPORTER METRICS MYSQL CHO PROMETHEUS (LEAST PRIVILEGE EXPORTER USER)
+  # ----------------------------------------------------------------------------
+  mysqld-exporter:
+    image: prom/mysqld-exporter:v0.15.1
+    container_name: news-mysqld-exporter
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      DATA_SOURCE_NAME: "${MYSQL_EXPORTER_USER}:${MYSQL_EXPORTER_PASSWORD}@(db:3306)/"
+    networks:
+      - backend-net
+      - monitoring-net
+    depends_on:
+      db:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '0.2'
+          memory: 128M
+
+  # ----------------------------------------------------------------------------
+  # 8. MÁY CHỦ THU THẬP TIME-SERIES METRICS - PROMETHEUS
+  # ----------------------------------------------------------------------------
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: news-prometheus
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.console.libraries=/etc/prometheus/console_libraries
+      - --web.console.templates=/etc/prometheus/consoles
+      - --web.enable-lifecycle
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml:ro
+      - prometheus_data:/prometheus
+    networks:
+      - monitoring-net
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  # ----------------------------------------------------------------------------
+  # 9. GIAO DIỆN TRỰC QUAN HÓA & DASHBOARDS - GRAFANA
+  # ----------------------------------------------------------------------------
+  grafana:
+    image: grafana/grafana:11.2.0
+    container_name: news-grafana
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+      GF_SERVER_ROOT_URL: "%(protocol)s://%(domain)s:%(http_port)s/grafana/"
+    volumes:
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    networks:
+      - frontend-net
+      - monitoring-net
+    depends_on:
+      - prometheus
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  # ----------------------------------------------------------------------------
+  # 10. MÁY CHỦ QUẢN LÝ NHẬT KÝ TẬP TRUNG - GRAFANA LOKI
+  # ----------------------------------------------------------------------------
+  loki:
+    image: grafana/loki:3.1.0
+    container_name: news-loki
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - ./loki/loki-config.yaml:/etc/loki/local-config.yaml:ro
+      - loki_data:/loki
+    networks:
+      - monitoring-net
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+
+  # ----------------------------------------------------------------------------
+  # 11. TÁC TỬ THU THẬP VÀ GÁN NHÃN NHẬT KÝ CONTAINER - PROMTAIL
+  # ----------------------------------------------------------------------------
+  promtail:
+    image: grafana/promtail:3.1.0
+    container_name: news-promtail
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    command: -config.file=/etc/promtail/config.yml
+    volumes:
+      - ./promtail/promtail-config.yaml:/etc/promtail/config.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - nginx_logs:/var/log/nginx:ro
+    networks:
+      - monitoring-net
+    depends_on:
+      - loki
+    deploy:
+      resources:
+        limits:
+          cpus: '0.3'
+          memory: 256M
+
+# ==============================================================================
+# ĐỊNH NGHĨA CÁC VÙNG MẠNG DOCKER (NETWORK ISOLATION)
+# ==============================================================================
+networks:
+  # Vùng mạng tiếp nhận yêu cầu từ Nginx Reverse Proxy
+  frontend-net:
+    driver: bridge
+    name: news-frontend-net
+
+  # Vùng mạng cô lập CSDL tuyệt đối (internal: true, không thể định tuyến ra ngoài)
+  backend-net:
+    driver: bridge
+    name: news-backend-net
+    internal: true
+
+  # Vùng mạng dành riêng cho hạ tầng Giám sát và Quản trị Log
+  monitoring-net:
+    driver: bridge
+    name: news-monitoring-net
+
+# ==============================================================================
+# ĐỊNH NGHĨA VOLUMES LƯU TRỮ DỮ LIỆU BỀN VỮNG (PERSISTENT VOLUMES)
+# ==============================================================================
+volumes:
+  mysql_data:
+    name: news_mysql_data
+  mysql_logs:
+    name: news_mysql_logs
+  nginx_logs:
+    name: news_nginx_logs
+  prometheus_data:
+    name: news_prometheus_data
+  grafana_data:
+    name: news_grafana_data
+  loki_data:
+    name: news_loki_data
