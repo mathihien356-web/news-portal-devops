@@ -1,0 +1,40 @@
+# ==============================================================================
+# QUY TẮC CẢNH BÁO TỰ ĐỘNG CHO PROMETHEUS & GRAFANA (ALERT RULES)
+# Sinh viên: Ma Thị Hiền (MSSV: DTC245200948)
+# ==============================================================================
+
+groups:
+  - name: news_portal_security_alerts
+    rules:
+      # Cảnh báo tấn công dò mật khẩu (Brute-force) nhắm vào trang đăng nhập
+      - alert: NewsPortalBruteForceLogin
+        expr: increase(news_portal_failed_logins_total[1m]) > 5
+        for: 30s
+        labels:
+          severity: critical
+          category: security
+        annotations:
+          summary: "Phát hiện tấn công dò mật khẩu (Brute-force Login)"
+          description: "Tần suất đăng nhập sai vượt ngưỡng 5 lần trong vòng 1 phút trên Cổng Tin tức."
+
+      # Cảnh báo bộ nhớ RAM container tăng cao bất thường
+      - alert: ContainerHighMemoryUsage
+        expr: (container_memory_usage_bytes{name=~".+"} / container_spec_memory_limit_bytes{name=~".+"}) * 100 > 85
+        for: 1m
+        labels:
+          severity: warning
+          category: infrastructure
+        annotations:
+          summary: "Tỷ lệ chiếm dụng RAM container cao bất thường"
+          description: "Container {{ $labels.name }} đang tiêu thụ trên 85% dung lượng RAM định mức."
+
+      # Cảnh báo lỗi 5xx trên máy chủ Nginx
+      - alert: NginxHighHttp5xxRate
+        expr: rate(nginx_http_requests_total{status=~"5.."}[1m]) > 0.5
+        for: 1m
+        labels:
+          severity: warning
+          category: web
+        annotations:
+          summary: "Phát sinh lỗi máy chủ HTTP 5xx trên Nginx"
+          description: "Tỷ lệ lỗi 5xx vượt quá 0.5 yêu cầu/giây trên Reverse Proxy."

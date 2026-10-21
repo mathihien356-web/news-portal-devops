@@ -1,0 +1,41 @@
+# ==============================================================================
+# HỆ THỐNG GIÁM SÁT PROMETHEUS - CẤU HÌNH THU THẬP METRICS (SCRAPING)
+# Sinh viên: Ma Thị Hiền (MSSV: DTC245200948 - Lớp: CNTTK23C)
+# ==============================================================================
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  scrape_timeout: 10s
+
+# Nạp các quy tắc cảnh báo tự động
+rule_files:
+  - "alert_rules.yml"
+
+# Danh sách các Jobs thu thập số liệu định kỳ từ các thành phần hệ thống
+scrape_configs:
+  # 1. Giám sát chính máy chủ Prometheus
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # 2. Giám sát phần cứng và tài nguyên Container qua cAdvisor
+  - job_name: "cadvisor"
+    static_configs:
+      - targets: ["cadvisor:8080"]
+
+  # 3. Giám sát hiệu năng và kết nối Nginx Reverse Proxy
+  - job_name: "nginx"
+    static_configs:
+      - targets: ["nginx-exporter:9113"]
+
+  # 4. Giám sát cơ sở dữ liệu MySQL 8.0 qua MySQLd Exporter
+  - job_name: "mysql"
+    static_configs:
+      - targets: ["mysqld-exporter:9104"]
+
+  # 5. Giám sát số liệu nghiệp vụ Ứng dụng Web Tin tức (Custom Metrics)
+  - job_name: "webapp"
+    metrics_path: "/api/metrics.php"
+    static_configs:
+      - targets: ["webapp:80"]
