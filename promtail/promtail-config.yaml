@@ -1,0 +1,66 @@
+# ==============================================================================
+# TÁC TỬ THU THẬP VÀ GÁN NHÃN NHẬT KÝ PROMTAIL (v3.1.0)
+# Tự động đọc nhật ký từ Docker Containers và chuyển tiếp về Grafana Loki
+# Sinh viên: Ma Thị Hiền (MSSV: DTC245200948 - Lớp: CNTTK23C)
+# ==============================================================================
+
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+  log_level: info
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+    batchwait: 1s
+    batchsize: 102400
+
+scrape_configs:
+  # 1. Thu thập nhật ký truy cập và lỗi của Nginx Reverse Proxy
+  - job_name: nginx
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: nginx
+          service: nginx-proxy
+          __path__: /var/log/nginx/*.log
+
+  # 2. Thu thập trực tiếp từ các file log container của Docker engine
+  - job_name: docker-containers
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: docker
+          __path__: /var/lib/docker/containers/*/*-json.log
+    pipeline_stages:
+      - json:
+          expressions:
+            log: log
+            stream: stream
+            time: time
+            attrs: attrs
+      - regex:
+          expression: '(?P<container_name>[^/]+)$'
+          source: 'tag'
+      # Phân loại và gán nhãn tự động theo dịch vụ
+      - match:
+          selector: '{job="docker"} |~ "(?i)(news-webapp|webapp|apache)"'
+          stages:
+            - labels:
+                job: webapp
+      - match:
+          selector: '{job="docker"} |~ "(?i)(news-nginx|nginx)"'
+          stages:
+            - labels:
+                job: nginx
+      - match:
+          selector: '{job="docker"} |~ "(?i)(news-db|mysql)"'
+          stages:
+            - labels:
+                job: mysql
+      - output:
+          source: log
