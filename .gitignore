@@ -1,0 +1,28 @@
+# Dependencies & Environments
+.env
+.env.local
+*.env
+vendor/
+node_modules/
+
+# OS and IDE files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Docker volumes and logs
+data/
+logs/
+*.log
+
+# Sensitive SSL private keys (in prod)
+nginx/ssl/*.key
+nginx/ssl/*.crt
+!nginx/ssl/.gitkeep
+
+# Local reference docs
+*.docx
+extracted_requirements.txt

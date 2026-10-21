@@ -1,0 +1,29 @@
+[mysqld]
+# Cấu hình mã hóa ký tự chuẩn Unicode tiếng Việt
+character-set-server = utf8mb4
+collation-server = utf8mb4_unicode_ci
+
+# Bảo mật cơ sở dữ liệu: Vô hiệu hóa tính năng nạp tệp từ client chống tấn công đọc tệp máy chủ
+local_infile = 0
+
+# Tối ưu bộ nhớ đệm InnoDB cho môi trường container
+innodb_buffer_pool_size = 256M
+innodb_log_file_size = 64M
+innodb_flush_log_at_trx_commit = 2
+innodb_flush_method = O_DIRECT
+
+# Giới hạn kết nối và kiểm soát tài nguyên
+max_connections = 150
+wait_timeout = 600
+interactive_timeout = 600
+
+# Nhật ký truy vấn chậm (Slow Query Log) phục vụ tối ưu hiệu năng
+slow_query_log = 1
+slow_query_log_file = /var/log/mysql/slow.log
+long_query_time = 2
+
+# Ghi nhật ký lỗi
+log_error = /var/log/mysql/error.log
+
+[client]
+default-character-set = utf8mb4
