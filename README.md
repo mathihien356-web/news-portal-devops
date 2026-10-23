@@ -4,9 +4,9 @@
 ---
 
 ### 🎓 THÔNG TIN SINH VIÊN THỰC HIỆN
-- **Họ và tên sinh viên:** Ma Thị Hiền
+- **Họ và tên sinh viên:** Ma Thị Hiện
 - **Mã số sinh viên (MSSV):** DTC245200948
-- **Lớp / Khóa:** CNTTK23C
+- **Lớp / Khóa:** CNTTK23G
 - **Khoa:** Công nghệ Thông tin
 - **Trường:** Đại học Công nghệ Thông tin và Truyền thông - Đại học Thái Nguyên (ICTU)
 - **Tài khoản GitHub:** [`mathihien356-web`](https://github.com/mathihien356-web)
@@ -193,7 +193,7 @@ docker compose ps
 | Hệ thống / Phân quyền | Tên đăng nhập (Username) | Mật khẩu (Password) | Vai trò & Đặc quyền |
 | :--- | :--- | :--- | :--- |
 | **Quản trị viên Portal (Admin)** | `admin` | `Admin@123456` | Toàn quyền quản trị bài viết, chuyên mục, tài khoản, audit logs |
-| **Biên tập viên (Author)** | `mathihien` | `Hien@123456` | Tác giả Ma Thị Hiền: Viết, sửa, xuất bản bài viết của mình |
+| **Biên tập viên (Author)** | `mathihien` | `Hien@123456` | Tác giả Ma Thị Hiện: Viết, sửa, xuất bản bài viết của mình |
 | **Phóng viên (Author)** | `nguyenvanan` | `An@123456` | Tác giả Nguyễn Văn An: Viết bài và biên tập nội dung |
 | **Độc giả (Reader)** | `reader1` | `Reader@123456` | Xem tin tức, gửi bình luận ý kiến bài viết |
 | **phpMyAdmin (DB Root)** | `root` | *Xem trong file .env* | Quản trị cấp cao nhất cơ sở dữ liệu MySQL |
